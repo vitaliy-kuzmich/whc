@@ -12,3 +12,10 @@ Arduino interupt ADC relay stainhart EEPROM
 PS do not forget to solder out resistor of the power charger to the battery of DS3231, otherwise 
 battery will get fat or blowup!
 Не зубудь выпаять резистор зарядки для батарейки на часы, иначе батарейка будет пухнуть или бахнет!
+
+Use https://www.thinksrs.com/downloads/programs/therm%20calc/ntccalibrator/ntccalculator.html in order 
+to calibrate your analog temperature sensor.
+
+Используй ссылку 
+https://www.thinksrs.com/downloads/programs/therm%20calc/ntccalibrator/ntccalculator.html для 
+калибровки аналогово датчика.
