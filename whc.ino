@@ -141,7 +141,7 @@ ISR(PCINT2_vect) {
       if (runOnce) {
         runOnce = false;
         //not possible to run when relay enabled, or already heated
-      } else if (mode == 0 && hitLowTempLimit()) {
+      } else if (mode == 0 && hitLowTempLimit(false)) {
         runOnce = true;
       }
 
@@ -379,8 +379,14 @@ void loop() {
 
   }
 */
-bool hitLowTempLimit() {
-  return temp <= ti - tempBuffer && !relayOn;
+uint8_t getNightTemp(bool isTime) {
+  return  isTime && ti > 50 ? 50 : ti;
+}
+bool hitLowTempLimit(bool isTime) {
+  return temp <= getNightTemp(isTime) - tempBuffer && !relayOn;
+}
+bool hitHighTempLimit(bool isTime) {
+  return temp >= getNightTemp(isTime) && relayOn;
 }
 //controls relay
 void relay() {
@@ -392,7 +398,9 @@ void relay() {
   bool isHealth = temp > 0 && temp < 80;
   bool needMod = false;
   relayOn = PIND & (1 << RELAY_PIN_PD) ;
-  bool hitLow = hitLowTempLimit();
+
+  bool hitLow = hitLowTempLimit(isTime);
+  bool hitHigh = hitHighTempLimit(isTime);
   /*
     Serial.println();
     Serial.println("isHealth : ");
@@ -413,22 +421,27 @@ void relay() {
     }
 
   } else if (runOnce) {
-    if (hitLow && !relayOn) {
+    if (hitLow ) {
       relayOn = true;
       needMod = true;
 
-    } else if (temp >= ti && relayOn) {
+    } else if (hitHigh) {
       relayOn = false;
       needMod = true;
-
-    } 
+    } else {
+      runOnce = false;
+      if (relayOn) {
+        relayOn = false;
+        needMod = true;
+      }
+    }
   } else {
-    if (hitLow && isTime && !relayOn) {
+    if (hitLow && isTime) {
       relayOn = true;
       needMod = true;
       runOnce = false;
 
-    } else if ((!isTime || temp >= (isTime && ti > 50 ? 50 : ti)) && relayOn) {
+    } else if ((!isTime && relayOn) || hitHigh) {
       relayOn = false;
       needMod = true;
     }
