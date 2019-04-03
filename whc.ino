@@ -428,12 +428,6 @@ void relay() {
     } else if (hitHigh) {
       relayOn = false;
       needMod = true;
-    } else {
-      runOnce = false;
-      if (relayOn) {
-        relayOn = false;
-        needMod = true;
-      }
     }
   } else {
     if (hitLow && isTime) {
