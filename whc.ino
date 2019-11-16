@@ -29,13 +29,14 @@ DateTime T;
 #define SBTN 4
 #define UBTN 5
 #define DBTN 6
-#define MOD_VAL_DELAY 180
+#define MOD_VAL_DELAY 120
 //display blink count max
 #define MC_MAX 4
 
 //temp settings/limits
 #define MAX_TEMP 75
-#define MIN_TEMP 35
+#define MIN_TEMP 55
+#define MAX_TEMP_NIGHT 45
 #define TEMP_PIN A0
 
 TM1637Display display(CLK, DIO);
@@ -49,7 +50,7 @@ const double A = 0.0007130888742;//e-3
 const double B = 0.0003107451187;//e-4
 const double C = -0.0000002858893427;//e-7
 const unsigned long debounceDelay = 80;
-const uint8_t  tempBuffer = 4;
+const uint8_t  tempBuffer = 3;
 //prevent trigger during boot time
 bool allowButtons = false;
 //current temp
@@ -141,7 +142,7 @@ ISR(PCINT2_vect) {
       if (runOnce) {
         runOnce = false;
         //not possible to run when relay enabled, or already heated
-      } else if (mode == 0 && hitLowTempLimit(false)) {
+      } else if (mode == 0 && hitLowTempLimit(false, false)) {
         runOnce = true;
       }
 
@@ -155,7 +156,7 @@ bool isUpOn() {
 }
 
 void setup() {
-  //Serial.begin(9600);
+ // Serial.begin(9600);
 
   setRelay();
 
@@ -379,14 +380,25 @@ void loop() {
 
   }
 */
-uint8_t getNightTemp(bool isTime) {
-  return  isTime && ti > 50 ? 50 : ti;
+uint8_t getNightTemp(bool isTime, bool isShrWem) {
+  uint8_t res = ti;
+  if (isShrWem) {
+    res  = MAX_TEMP_NIGHT;
+  } else if (isTime) {
+    res = MIN_TEMP;
+  }
+//  Serial.println("===========================================");
+  //Serial.println("Night temp : ");
+  //uSerial.println(res);
+
+  return res;
 }
-bool hitLowTempLimit(bool isTime) {
-  return temp <= getNightTemp(isTime) - tempBuffer && !relayOn;
+
+bool hitLowTempLimit(bool isTime, bool isShrWem) {
+  return temp <= getNightTemp(isTime, isShrWem) - tempBuffer && !relayOn;
 }
-bool hitHighTempLimit(bool isTime) {
-  return temp >= getNightTemp(isTime) && relayOn;
+bool hitHighTempLimit(bool isTime, bool isShrWem) {
+  return temp >= getNightTemp(isTime, isShrWem) && relayOn;
 }
 //controls relay
 void relay() {
@@ -394,13 +406,18 @@ void relay() {
   temp = calcTemp();
 
   uint8_t h = T.hour();
-  bool isTime = h > 22 || h >= 0 && h <= 7;
+
+  bool isTime = h >= 5 && h < 7;
+  bool isShortWarm = h == 23 || h == 0 ;
+
   bool isHealth = temp > 0 && temp < 80;
   bool needMod = false;
   relayOn = PIND & (1 << RELAY_PIN_PD) ;
 
-  bool hitLow = hitLowTempLimit(isTime);
-  bool hitHigh = hitHighTempLimit(isTime);
+  bool hitLow = hitLowTempLimit(isTime, isShortWarm);
+  bool hitHigh = hitHighTempLimit(isTime, isShortWarm);
+
+
   /*
     Serial.println();
     Serial.println("isHealth : ");
@@ -430,12 +447,12 @@ void relay() {
       needMod = true;
     }
   } else {
-    if (hitLow && isTime) {
+    if (hitLow && (isTime || isShortWarm)) {
       relayOn = true;
       needMod = true;
       runOnce = false;
 
-    } else if ((!isTime && relayOn) || hitHigh) {
+    } else if ((!(isTime || isShortWarm) && relayOn) || hitHigh) {
       relayOn = false;
       needMod = true;
     }
