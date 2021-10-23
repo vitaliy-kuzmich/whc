@@ -35,8 +35,9 @@ DateTime T;
 
 //temp settings/limits
 #define MAX_TEMP 75
-#define MIN_TEMP 55
+#define MIN_TEMP 40
 #define MAX_TEMP_NIGHT 45
+#define MAX_TEMP_MORNING 63
 #define TEMP_PIN A0
 
 TM1637Display display(CLK, DIO);
@@ -67,7 +68,7 @@ unsigned long btnLast[] = {0, 0, 0};
 //eeprom memory  of temp
 uint8_t  ti;
 //only in mode=0. 0 - temp, 1 - time
-bool isTime;
+bool isDisplayTime;
 #define BUFFER_SIZE 16 // For 12 Bit ADC data
 volatile uint32_t result[BUFFER_SIZE];
 volatile byte i = 0;
@@ -192,7 +193,7 @@ void setRelay() {
 
   //0 freerun, 1 - temp settings, 2 - hour, 3 - minutes
   mode = 0;
-  isTime = false;
+  isDisplayTime = false;
 
   runOnce = false;
 }
@@ -290,13 +291,13 @@ void updateDisplay() {
       break;
     default:
       //blink display
-      if (isTime) {
+      if (isDisplayTime) {
         display.showNumberDecEx(T.hour() * 100 +  T.minute(), 0b01000000, true);
       } else {
         display.showNumberDecEx(DOUBLE_TO_INT(temp) * 100 + ti, 0b00000000, false);
 
       }
-      isTime = !isTime;
+      isDisplayTime = !isDisplayTime;
       break;
   }
 }
@@ -316,15 +317,16 @@ void loop() {
       digitalWrite(LED_BUILTIN, LOW);
       delay(1000);
       if (mode != 0)continue;
-
+/*
       if (lowBat) {
         display.clear();
         uint8_t data[] = { 0b1111100, 0b1110111, 0b0000111, 0b0110001 };
         display.setSegments( data);
         delay(1000);
       } else {
+      */
         updateDisplay();
-      }
+      //}
 
     } else {
       while (mc > 0) {
@@ -380,25 +382,25 @@ void loop() {
 
   }
 */
-uint8_t getNightTemp(bool isTime, bool isShrWem) {
+uint8_t getAutoHeatTemp(bool isMorningTime, bool isNightTime) {
   uint8_t res = ti;
-  if (isShrWem) {
+  if (isNightTime) {
     res  = MAX_TEMP_NIGHT;
-  } else if (isTime) {
-    res = MIN_TEMP;
+  } else if (isMorningTime) {
+    res = MAX_TEMP_MORNING;
   }
-//  Serial.println("===========================================");
-  //Serial.println("Night temp : ");
-  //uSerial.println(res);
-
+/* Serial.println("===========================================");
+  Serial.println("AutoHeat temp : ");
+  Serial.println(res);
+*/
   return res;
 }
 
-bool hitLowTempLimit(bool isTime, bool isShrWem) {
-  return temp <= getNightTemp(isTime, isShrWem) - tempBuffer && !relayOn;
+bool hitLowTempLimit(bool isMorningTime, bool isNightTime) {
+  return temp <= getAutoHeatTemp(isMorningTime, isNightTime) - tempBuffer && !relayOn;
 }
-bool hitHighTempLimit(bool isTime, bool isShrWem) {
-  return temp >= getNightTemp(isTime, isShrWem) && relayOn;
+bool hitHighTempLimit(bool isMorningTime, bool isNightTime) {
+  return temp >= getAutoHeatTemp(isMorningTime, isNightTime) && relayOn;
 }
 //controls relay
 void relay() {
@@ -407,23 +409,21 @@ void relay() {
 
   uint8_t h = T.hour();
 
-  bool isTime = h >= 5 && h < 7;
-  bool isShortWarm = h == 23 || h == 0 ;
+  bool isMorningTime = h >= 5 && h < 7;
+  bool isNightTime = h == 23 || h == 0 ;
 
   bool isHealth = temp > 0 && temp < 80;
   bool needMod = false;
   relayOn = PIND & (1 << RELAY_PIN_PD) ;
 
-  bool hitLow = hitLowTempLimit(isTime, isShortWarm);
-  bool hitHigh = hitHighTempLimit(isTime, isShortWarm);
-
-
-  /*
+  bool hitLow = hitLowTempLimit(isMorningTime, isNightTime);
+  bool hitHigh = hitHighTempLimit(isMorningTime, isNightTime);
+/*
     Serial.println();
     Serial.println("isHealth : ");
     Serial.println(isHealth);
-    Serial.println("isTime : ");
-    Serial.println(isTime);
+    Serial.println("isMorningTime : ");
+    Serial.println(isMorningTime);
     Serial.println("hitLow  : ");
     Serial.println(hitLow);
     Serial.println("hitHigh : ");
@@ -447,12 +447,12 @@ void relay() {
       needMod = true;
     }
   } else {
-    if (hitLow && (isTime || isShortWarm)) {
+    if (hitLow && (isMorningTime || isNightTime)) {
       relayOn = true;
       needMod = true;
       runOnce = false;
 
-    } else if ((!(isTime || isShortWarm) && relayOn) || hitHigh) {
+    } else if ((!(isMorningTime || isNightTime) && relayOn) || hitHigh) {
       relayOn = false;
       needMod = true;
     }
